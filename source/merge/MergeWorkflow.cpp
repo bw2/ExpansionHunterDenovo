@@ -30,6 +30,13 @@
 #include <unordered_set>
 #include <vector>
 
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/copy.hpp>
+
+
 #include "thirdparty/nlohmann_json/json.hpp"
 #include "thirdparty/spdlog/spdlog.h"
 
@@ -162,15 +169,25 @@ void loadSampleProfile(
     MultisampleAnchoredIrrProfile& anchoredIrrProfile, MultisampleIrrPairProfile& pairedIrrProfile,
     SampleIdToSampleParameters& parametersForSamples, int shortestUnit, int longestUnit)
 {
-    std::ifstream profileFile(sampleInfo.path);
-    if (!profileFile)
+	Json profileJson;
+
+    if (boost::algorithm::ends_with(sampleInfo.path, "gz"))
     {
-        throw std::runtime_error("Unable to read " + sampleInfo.path);
+        std::ifstream binaryInputStream(sampleInfo.path.c_str(), std::ios::binary);
+        boost::iostreams::filtering_istreambuf bufferedInputStream;
+        bufferedInputStream.push(boost::iostreams::gzip_decompressor());
+        bufferedInputStream.push(binaryInputStream);
+        std::istream(&bufferedInputStream) >> profileJson;
+
+    } else {
+      std::ifstream profileFile(sampleInfo.path);
+      if (!profileFile)
+	{
+	  throw std::runtime_error("Unable to read " + sampleInfo.path);
+	}
+      profileFile >> profileJson;
     }
-
-    Json profileJson;
-    profileFile >> profileJson;
-
+    
     int readLength = 0;
     double depth = -1;
     for (const auto& record : profileJson.items())
